@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, send_file, make_response
+from flask import Flask, render_template, request, send_file, make_response, session, redirect, url_for
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
@@ -11,6 +11,12 @@ from datetime import datetime
 from random import randint
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "aguia_branca_secret")
+
+# 🔐 LOGIN CONFIG (Render ou padrão)
+USER = os.environ.get("APP_USER", "Qualidade")
+PASS = os.environ.get("APP_PASS", "VAB@2026")
+
 COUNTER_FILE = "contador_recibo.txt"
 
 def gerar_numero_sequencial():
@@ -29,9 +35,29 @@ def gerar_numero_sequencial():
             f.write(str(numero + 1))
 
         return str(numero).zfill(5)
-    except Exception as e:
-        print(f"Erro: {e}")
+    except:
         return str(randint(10000, 99999))
+
+# 🔐 LOGIN
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        usuario = request.form.get("usuario")
+        senha = request.form.get("senha")
+
+        if usuario == USER and senha == PASS:
+            session["logado"] = True
+            return redirect(url_for("index"))
+        else:
+            return render_template("login.html", erro="Usuário ou senha inválidos")
+
+    return render_template("login.html")
+
+# 🔐 LOGOUT
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 CNPJS = [
     {"label": "Viação Águia Branca S/A – Matriz", "value": "33.216.104/0001-00"},
@@ -49,12 +75,19 @@ TIPOS_ADICIONAL = [
     "Outros",
 ]
 
+# 🔐 PROTEÇÃO DA HOME
 @app.route("/")
 def index():
+    if not session.get("logado"):
+        return redirect(url_for("login"))
     return render_template("index.html", cnpjs=CNPJS, tipos=TIPOS_ADICIONAL)
 
+# 🔐 PROTEÇÃO DO PDF
 @app.route("/gerar-pdf", methods=["POST"])
 def gerar_pdf():
+    if not session.get("logado"):
+        return {"error": "Não autorizado"}, 403
+
     try:
         data = request.json or {}
         numero = gerar_numero_sequencial()
