@@ -267,15 +267,15 @@ def gerar_pdf():
         elems.append(viagem_table)
         elems.append(Spacer(1, 3))
 
-        qtd = float(data.get("qtd_diarias", 1))
-        val = float(data.get("valor_diaria", 0))
+        qtd = float(str(data.get("qtd_diarias", 1)).replace(",", "."))
+        val = float(str(data.get("valor_diaria", 0)).replace(",", "."))
         subtotal = qtd * val
         adicionais = data.get("adicionais", [])
         total_add = sum(float(a.get("valor", 0)) for a in adicionais if a.get("valor"))
         total = subtotal + total_add
 
         tabela_dados = [["Descrição", "Qtd.", "Unitário", "Total"]]
-        tabela_dados.append(["Diária de motorista", str(int(qtd)), brl(val), brl(subtotal)])
+        tabela_dados.append(["Diária de motorista", str(qtd), brl(val), brl(subtotal)])
 
         for a in adicionais:
             valor = float(a.get("valor", 0) or 0)
