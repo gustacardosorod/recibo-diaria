@@ -9,9 +9,11 @@ import io
 import os
 from datetime import datetime
 from random import randint
+from datetime import timedelta
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "aguia_branca_secret")
+app.permanent_session_lifetime = timedelta(minutes=15)
 
 # 🔐 LOGIN CONFIG (Render ou padrão)
 USER = os.environ.get("APP_USER", "Qualidade")
@@ -41,12 +43,17 @@ def gerar_numero_sequencial():
 # 🔐 LOGIN
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    # 👇 SE JÁ ESTIVER LOGADO, NÃO MOSTRA LOGIN
+    if session.get("logado"):
+        return redirect(url_for("index"))
+
     if request.method == "POST":
         usuario = request.form.get("usuario")
         senha = request.form.get("senha")
 
         if usuario == USER and senha == PASS:
             session["logado"] = True
+            session.permanent = True
             return redirect(url_for("index"))
         else:
             return render_template("login.html", erro="Usuário ou senha inválidos")
