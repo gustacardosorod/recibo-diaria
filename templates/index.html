@@ -589,12 +589,27 @@
 
   <script>
     let adicionais = [];
+    let adicionaisIdCounter = 0;
     const TIPOS = JSON.parse('{{ tipos | tojson | safe }}');
-    
+
+    // Mapa para busca rápida de empresa por CNPJ
+    const empresasMap = {};
+
+    // Inicializar mapa de empresas
+    document.querySelectorAll('#cnpj option').forEach(opt => {
+      if (opt.value) {
+        empresasMap[opt.value] = opt.dataset.label || opt.textContent;
+      }
+    });
+
     document.getElementById('cnpj').addEventListener('change', atualizar);
 
     function fmt(v) {
-      return 'R$ ' + (parseFloat(v || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      if (isNaN(v) || v === null || v === '') return 'R$ 0,00';
+      return 'R$ ' + (parseFloat(v || 0)).toLocaleString('pt-BR', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
     }
 
     function fmtData(d) {
@@ -604,8 +619,28 @@
     }
 
     function adicionarItem() {
-      adicionais.push({ id: Date.now(), tipo: '', valor: '' });
+      adicionais.push({
+        id: ++adicionaisIdCounter,
+        tipo: '',
+        valor: ''
+      });
       renderAdicionais();
+    }
+
+    function atualizarTipoAdicional(id, tipo) {
+      const item = adicionais.find(i => i.id === id);
+      if (item) {
+        item.tipo = tipo;
+        atualizar();
+      }
+    }
+
+    function atualizarValorAdicional(id, valor) {
+      const item = adicionais.find(i => i.id === id);
+      if (item) {
+        item.valor = valor;
+        atualizar();
+      }
     }
 
     function removerItem(id) {
@@ -616,44 +651,62 @@
 
     function renderAdicionais() {
       const list = document.getElementById('add-list');
+      if (!list) return;
+
       list.innerHTML = '';
-      adicionais.forEach((item, idx) => {
+      adicionais.forEach((item) => {
         const row = document.createElement('div');
         row.className = 'adicional-row';
-        const opts = TIPOS.map(t => `<option value="${t}" ${item.tipo === t ? 'selected' : ''}>${t}</option>`).join('');
+        const opts = TIPOS.map(t => `<option value="${t.replace(/"/g, '&quot;')}" ${item.tipo === t ? 'selected' : ''}>${escapeHtml(t)}</option>`).join('');
         row.innerHTML = `
-      <select onchange="adicionais[${idx}].tipo=this.value;atualizar()">
-        <option value="">Tipo…</option>${opts}
-      </select>
-      <input type="number" step="0.01" placeholder="R$ 0,00" value="${item.valor}" style="text-align:right;" oninput="adicionais[${idx}].valor=this.value;atualizar()"/>
-      <button class="btn-rm" onclick="removerItem(${item.id})">×</button>
-    `;
+                <select data-id="${item.id}" class="adicional-tipo">
+                    <option value="">Tipo…</option>${opts}
+                </select>
+                <input type="number" step="0.01" placeholder="R$ 0,00" value="${item.valor}" class="adicional-valor" style="text-align:right;"/>
+                <button class="btn-rm" data-id="${item.id}">×</button>
+            `;
+
+        // Adicionar event listeners
+        const select = row.querySelector('.adicional-tipo');
+        const input = row.querySelector('.adicional-valor');
+        const btn = row.querySelector('.btn-rm');
+
+        select.addEventListener('change', (e) => atualizarTipoAdicional(item.id, e.target.value));
+        input.addEventListener('input', (e) => atualizarValorAdicional(item.id, e.target.value));
+        btn.addEventListener('click', () => removerItem(item.id));
+
         list.appendChild(row);
       });
       atualizar();
     }
 
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
     function coletarDados() {
-      const qtd = parseFloat(document.getElementById('qtd_diarias').value) || 0;
-      const vunit = parseFloat(document.getElementById('valor_diaria').value) || 0;
+      const qtd = parseFloat(document.getElementById('qtd_diarias')?.value) || 0;
+      const vunit = parseFloat(document.getElementById('valor_diaria')?.value) || 0;
       const sub = qtd * vunit;
       const extras = adicionais.reduce((a, i) => a + (parseFloat(i.valor) || 0), 0);
       const cnpjSel = document.getElementById('cnpj');
 
-      // ← Lê o nome da empresa direto do data-label do option selecionado
-      const empresaLabel = cnpjSel.options[cnpjSel.selectedIndex]?.dataset?.label || '';
+      // Buscar empresa do mapa
+      const empresaLabel = empresasMap[cnpjSel?.value] || '';
 
       return {
-        empresa: empresaLabel, // ← vem do CNPJ selecionado
-        cnpj: cnpjSel.value,
-        matricula: document.getElementById('matricula').value,
-        nome: document.getElementById('nome').value,
-        codigo_servico: document.getElementById('codigo_servico').value,
-        destino: document.getElementById('destino').value,
-        data_partida: document.getElementById('data_partida').value,
-        hora_partida: document.getElementById('hora_partida').value,
-        data_chegada: document.getElementById('data_chegada').value,
-        hora_chegada: document.getElementById('hora_chegada').value,
+        empresa: empresaLabel,
+        cnpj: cnpjSel?.value || '',
+        matricula: document.getElementById('matricula')?.value || '',
+        nome: document.getElementById('nome')?.value || '',
+        codigo_servico: document.getElementById('codigo_servico')?.value || '',
+        destino: document.getElementById('destino')?.value || '',
+        data_partida: document.getElementById('data_partida')?.value || '',
+        hora_partida: document.getElementById('hora_partida')?.value || '',
+        data_chegada: document.getElementById('data_chegada')?.value || '',
+        hora_chegada: document.getElementById('hora_chegada')?.value || '',
         qtd_diarias: qtd,
         valor_diaria: vunit,
         subtotal: sub,
@@ -663,89 +716,150 @@
       };
     }
 
+    function validarDados(dados) {
+      const errors = [];
+      if (!dados.nome) errors.push('Nome do motorista é obrigatório');
+      if (!dados.cnpj) errors.push('CNPJ é obrigatório');
+      if (!dados.matricula) errors.push('Matrícula é obrigatória');
+      if (dados.qtd_diarias <= 0) errors.push('Quantidade de diárias deve ser maior que zero');
+      if (dados.valor_diaria <= 0) errors.push('Valor da diária deve ser maior que zero');
+
+      return errors;
+    }
+
     function atualizar() {
       const d = coletarDados();
 
-      // ← Sincroniza o campo visual "Empresa" com o CNPJ selecionado
+      // Sincronizar campo empresa
       const inputEmpresa = document.getElementById('empresa');
       if (inputEmpresa) inputEmpresa.value = d.empresa;
 
-      document.getElementById('total-display').textContent = fmt(d.total);
+      // Atualizar total display
+      const totalDisplay = document.getElementById('total-display');
+      if (totalDisplay) totalDisplay.textContent = fmt(d.total);
+
       renderPreview(d);
-      document.getElementById('btn-download').disabled = !d.nome;
+
+      // Validar campos obrigatórios
+      const errors = validarDados(d);
+      const btnDownload = document.getElementById('btn-download');
+      if (btnDownload) btnDownload.disabled = errors.length > 0;
+
+      // Opcional: mostrar erros
+      const errorDiv = document.getElementById('validation-errors');
+      if (errorDiv) {
+        errorDiv.innerHTML = errors.map(e => `<div class="error">⚠️ ${e}</div>`).join('');
+        errorDiv.style.display = errors.length ? 'block' : 'none';
+      }
     }
 
     function renderPreview(d) {
       const pb = document.getElementById('preview-body');
+      if (!pb) return;
+
       const adRows = d.adicionais.map(i => `
-    <tr>
-      <td>${i.tipo || 'Adicional'}</td>
-      <td style="text-align:center">—</td>
-      <td style="text-align:right">—</td>
-      <td style="text-align:right">${fmt(parseFloat(i.valor) || 0)}</td>
-    </tr>
-  `).join('');
+            <tr>
+                <td>${escapeHtml(i.tipo || 'Adicional')}</td>
+                <td style="text-align:center">—</td>
+                <td style="text-align:right">—</td>
+                <td style="text-align:right">${fmt(parseFloat(i.valor) || 0)}</td>
+            </tr>
+        `).join('');
 
       pb.innerHTML = `
-    <div class="rec-top">
-      <h2>Recibo de Pagamento</h2>
-      <p>Diária de Motorista · ${d.empresa || '—'}</p>
-    </div>
-    <div class="rec-info-grid">
-      <div class="rec-info-item"><div class="lbl">Empresa</div><div class="val">${d.empresa || '—'}</div></div>
-      <div class="rec-info-item"><div class="lbl">CNPJ</div><div class="val">${d.cnpj || '—'}</div></div>
-      <div class="rec-info-item"><div class="lbl">Matrícula</div><div class="val">${d.matricula || '—'}</div></div>
-      <div class="rec-info-item"><div class="lbl">Motorista</div><div class="val">${d.nome || '—'}</div></div>
-      ${d.codigo_servico ? `<div class="rec-info-item"><div class="lbl">Cód. Serviço</div><div class="val">${d.codigo_servico}</div></div>` : ''}
-      <div class="rec-info-item" style="grid-column:1/-1"><div class="lbl">Destino</div><div class="val">${d.destino || '—'}</div></div>
-      <div class="rec-info-item"><div class="lbl">Partida</div><div class="val">${fmtData(d.data_partida) || '—'} ${d.hora_partida || ''}</div></div>
-      <div class="rec-info-item"><div class="lbl">Chegada</div><div class="val">${fmtData(d.data_chegada) || '—'} ${d.hora_chegada || ''}</div></div>
-    </div>
-    <table class="rec-table">
-      <thead>
-        <tr>
-          <th>Descrição</th>
-          <th style="text-align:center">Qtd.</th>
-          <th style="text-align:right">Unit.</th>
-          <th style="text-align:right">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Diária de motorista</td>
-          <td style="text-align:center">${d.qtd_diarias}</td>
-          <td style="text-align:right">${fmt(d.valor_diaria)}</td>
-          <td style="text-align:right">${fmt(d.subtotal)}</td>
-        </tr>
-        ${adRows}
-        <tr class="total-row">
-          <td colspan="3">Total geral</td>
-          <td style="text-align:right">${fmt(d.total)}</td>
-        </tr>
-      </tbody>
-    </table>
-    <p style="text-align:center;font-size:0.65rem;color:var(--muted);margin-top:10px;">
-      Emitido em ${d.hoje}
-    </p>
-  `;
+            <div class="rec-top">
+                <h2>Recibo de Pagamento</h2>
+                <p>Diária de Motorista · ${escapeHtml(d.empresa || '—')}</p>
+            </div>
+            <div class="rec-info-grid">
+                <div class="rec-info-item"><div class="lbl">Empresa</div><div class="val">${escapeHtml(d.empresa || '—')}</div></div>
+                <div class="rec-info-item"><div class="lbl">CNPJ</div><div class="val">${escapeHtml(d.cnpj || '—')}</div></div>
+                <div class="rec-info-item"><div class="lbl">Matrícula</div><div class="val">${escapeHtml(d.matricula || '—')}</div></div>
+                <div class="rec-info-item"><div class="lbl">Motorista</div><div class="val">${escapeHtml(d.nome || '—')}</div></div>
+                ${d.codigo_servico ? `<div class="rec-info-item"><div class="lbl">Cód. Serviço</div><div class="val">${escapeHtml(d.codigo_servico)}</div></div>` : ''}
+                <div class="rec-info-item" style="grid-column:1/-1"><div class="lbl">Destino</div><div class="val">${escapeHtml(d.destino || '—')}</div></div>
+                <div class="rec-info-item"><div class="lbl">Partida</div><div class="val">${fmtData(d.data_partida) || '—'} ${escapeHtml(d.hora_partida || '')}</div></div>
+                <div class="rec-info-item"><div class="lbl">Chegada</div><div class="val">${fmtData(d.data_chegada) || '—'} ${escapeHtml(d.hora_chegada || '')}</div></div>
+            </div>
+            <table class="rec-table">
+                <thead>
+                    <tr>
+                        <th>Descrição</th>
+                        <th style="text-align:center">Qtd.</th>
+                        <th style="text-align:right">Unit.</th>
+                        <th style="text-align:right">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Diária de motorista</td>
+                        <td style="text-align:center">${d.qtd_diarias}</td>
+                        <td style="text-align:right">${fmt(d.valor_diaria)}</td>
+                        <td style="text-align:right">${fmt(d.subtotal)}</td>
+                    </tr>
+                    ${adRows}
+                    <tr class="total-row">
+                        <td colspan="3">Total geral</td>
+                        <td style="text-align:right">${fmt(d.total)}</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="text-align:center;font-size:0.65rem;color:var(--muted);margin-top:10px;">
+                Emitido em ${escapeHtml(d.hoje)}
+            </p>
+        `;
+    }
+
+    function resetarFormulario() {
+      // Limpar todos os inputs
+      document.querySelectorAll('input:not([type="hidden"])').forEach(i => {
+        if (i.type !== 'button' && i.type !== 'submit') {
+          i.value = '';
+        }
+      });
+
+      // Resetar selects
+      document.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
+
+      // Limpar adicionais
+      adicionais = [];
+      adicionaisIdCounter = 0;
+
+      // Re-renderizar
+      renderAdicionais();
+      atualizar();
     }
 
     async function baixarPDF() {
       const btn = document.querySelector('.btn-gerar');
+      if (!btn) return;
+
+      const dados = coletarDados();
+      const errors = validarDados(dados);
+
+      if (errors.length > 0) {
+        alert('Por favor, preencha todos os campos obrigatórios:\n- ' + errors.join('\n- '));
+        return;
+      }
+
       btn.disabled = true;
+      const originalText = btn.textContent;
       btn.textContent = 'Gerando PDF…';
 
       try {
         const response = await fetch('/gerar-pdf', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(coletarDados())
+          body: JSON.stringify(dados)
         });
 
-        if (!response.ok) throw new Error('Erro ao gerar PDF');
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Erro ${response.status}: ${errorText}`);
+        }
 
         const blob = await response.blob();
-        const numero = response.headers.get('X-Recibo-Numero') || 'recibo';
+        const numero = response.headers.get('X-Recibo-Numero') || Date.now().toString();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -755,15 +869,19 @@
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
+        resetarFormulario();
+
         const toast = document.getElementById('toast');
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 3000);
+        if (toast) {
+          toast.classList.add('show');
+          setTimeout(() => toast.classList.remove('show'), 3000);
+        }
       } catch (error) {
-        console.error('Erro:', error);
+        console.error('Erro detalhado:', error);
         alert('Erro ao gerar PDF: ' + error.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = '✦ Gerar recibo & baixar PDF';
+        btn.textContent = originalText;
       }
     }
 
@@ -771,7 +889,11 @@
       baixarPDF();
     }
 
-    atualizar();
+    // Inicialização
+    document.addEventListener('DOMContentLoaded', () => {
+      renderAdicionais();
+      atualizar();
+    });
   </script>
 </body>
 
