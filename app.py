@@ -15,7 +15,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "aguia_branca_secret")
 app.permanent_session_lifetime = timedelta(minutes=15)
 
-# 🔐 LOGIN CONFIG (Render ou padrão)
+# LOGIN CONFIG (Render ou padrão)
 USER = os.environ.get("APP_USER", "Qualidade")
 PASS = os.environ.get("APP_PASS", "VAB@2026")
 
@@ -40,7 +40,7 @@ def gerar_numero_sequencial():
     except:
         return str(randint(10000, 99999))
 
-# 🔐 LOGIN
+# LOGIN
 @app.route("/login", methods=["GET", "POST"])
 def login():
     # 👇 SE JÁ ESTIVER LOGADO, NÃO MOSTRA LOGIN
@@ -60,16 +60,14 @@ def login():
 
     return render_template("login.html")
 
-# 🔐 LOGOUT
+#LOGOUT
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
 CNPJS = [
-    {"label": "Viação Águia Branca S/A – Matriz", "value": "33.216.104/0001-00"},
-    {"label": "Viação Águia Branca S/A – Filial 1", "value": "33.216.104/0002-81"},
-    {"label": "Viação Águia Branca S/A – Filial 2", "value": "33.216.104/0003-62"},
+    {"label": "Viação Águia Branca S/A","value": "27.486.182/0001-09"},
 ]
 
 TIPOS_ADICIONAL = [
@@ -82,14 +80,14 @@ TIPOS_ADICIONAL = [
     "Outros",
 ]
 
-# 🔐 PROTEÇÃO DA HOME
+# PROTEÇÃO DO INDEX
 @app.route("/")
 def index():
     if not session.get("logado"):
         return redirect(url_for("login"))
     return render_template("index.html", cnpjs=CNPJS, tipos=TIPOS_ADICIONAL)
 
-# 🔐 PROTEÇÃO DO PDF
+# PROTEÇÃO DO PDF
 @app.route("/gerar-pdf", methods=["POST"])
 def gerar_pdf():
     if not session.get("logado"):

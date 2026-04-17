@@ -580,11 +580,6 @@
               <p>Preencha o formulário para<br />visualizar o recibo aqui.</p>
             </div>
           </div>
-          <div style="padding:0 1.25rem 1.25rem;">
-            <button class="btn-download" id="btn-download" onclick="baixarPDF()" disabled>
-              ⬇ Baixar PDF
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -594,8 +589,8 @@
 
   <script>
     let adicionais = [];
-    const TIPOS = {{ tipos | tojson }};
-
+    const TIPOS = JSON.parse('{{ tipos | tojson | safe }}');
+    
     document.getElementById('cnpj').addEventListener('change', atualizar);
 
     function fmt(v) {
